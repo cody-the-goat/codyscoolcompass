@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compass Controller</title>
+<style>
+  :root {
+    --bg:       #0a0a0f;
+    --surface:  #13131a;
+    --border:   #2a2a3a;
+    --accent:   #00e5ff;
+    --accent2:  #ffd600;
+    --text:     #e8eaf0;
+    --muted:    #5a5a7a;
+    --connected:#00e5a0;
+    --radius:   14px;
+    --font:     'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+    gap: 20px;
+  }
+  header { text-align: center; }
+  header h1 { font-size: 1.1rem; letter-spacing: 0.2em; color: var(--accent); text-transform: uppercase; }
+  header p  { font-size: 0.7rem; color: var(--muted); margin-top: 4px; letter-spacing: 0.1em; }
+
+  #status-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 999px; padding: 8px 18px;
+    font-size: 0.75rem; letter-spacing: 0.08em;
+  }
+  #status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
+  #status-dot.on  { background: var(--connected); box-shadow: 0 0 8px var(--connected); }
+  #status-dot.err { background: #ff4444; }
+  #status-text { color: var(--muted); }
+
+  #btn-connect {
+    background: transparent; border: 1.5px solid var(--accent);
+    color: var(--accent); font-family: var(--font); font-size: 0.8rem;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 12px 28px; border-radius: 999px; cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #btn-connect:active { background: var(--accent); color: var(--bg); }
+
+  /* ── Nav search box ── */
+  .nav-box {
+    width: 100%; max-width: 360px;
+    background: var(--surface);
+    border: 1.5px solid var(--accent2);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .nav-box label { font-size: 0.7rem; color: var(--accent2); letter-spacing: 0.1em; }
+  .nav-row { display: flex; gap: 8px; }
+  #place-input {
+    flex: 1;
+    background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-family: var(--font); font-size: 0.85rem;
+    padding: 10px 12px; outline: none;
+  }
+  #place-input:focus { border-color: var(--accent2); }
+  #place-input::placeholder { color: var(--muted); }
+  #btn-nav {
+    background: var(--accent2); color: var(--bg);
+    border: none; border-radius: 8px;
+    font-family: var(--font); font-size: 0.75rem; font-weight: bold;
+    letter-spacing: 0.1em; padding: 10px 14px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s; white-space: nowrap;
+  }
+  #btn-nav:active { opacity: 0.7; }
+  #nav-status {
+    font-size: 0.7rem; color: var(--muted); min-height: 1.2em; text-align: center;
+  }
+  #nav-status.ok  { color: var(--connected); }
+  #nav-status.err { color: #ff4444; }
+
+  /* ── Compass rose ── */
+  .compass-wrap { position: relative; width: 260px; height: 260px; }
+  .compass-rose { width: 100%; height: 100%; }
+
+  .dir-btn {
+    position: absolute; width: 52px; height: 52px; border-radius: 50%;
+    border: 1.5px solid var(--border); background: var(--surface); color: var(--text);
+    font-family: var(--font); font-size: 0.7rem; letter-spacing: 0.05em; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent; user-select: none;
+  }
+  .dir-btn:active, .dir-btn.active {
+    background: var(--accent); color: var(--bg); border-color: var(--accent); transform: scale(0.93);
+  }
+  .dir-btn.cardinal { font-size: 0.8rem; font-weight: bold; }
+
+  .dir-N  { top:  8px;  left: 104px; }
+  .dir-NE { top:  32px; left: 196px; }
+  .dir-E  { top: 104px; left: 206px; }
+  .dir-SE { top: 196px; left: 196px; }
+  .dir-S  { top: 206px; left: 104px; }
+  .dir-SW { top: 196px; left:  14px; }
+  .dir-W  { top: 104px; left:   8px; }
+  .dir-NW { top:  32px; left:  14px; }
+
+  .dir-HERE {
+    position: absolute; top: 104px; left: 104px; width: 52px; height: 52px;
+    border-radius: 50%; border: 1.5px solid var(--accent2);
+    background: var(--surface); color: var(--accent2);
+    font-family: var(--font); font-size: 0.6rem; letter-spacing: 0.05em; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .dir-HERE:active { background: var(--accent2); color: var(--bg); transform: scale(0.93); }
+
+  /* live bearing display */
+  #bearing-display {
+    font-size: 2rem; color: var(--accent); letter-spacing: 0.1em;
+    text-align: center; min-height: 2.5rem;
+  }
+  #bearing-label { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.15em; text-align: center; }
+
+  #last-sent { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.1em; height: 1em; }
+  #last-sent span { color: var(--accent); }
+
+  .note {
+    font-size: 0.65rem; color: var(--muted); text-align: center;
+    max-width: 300px; line-height: 1.6; padding: 10px 14px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .note a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⬆ Compass</h1>
+  <p>BLE → ESP32 Matrix Controller</p>
+</header>
+
+<div id="status-bar">
+  <div id="status-dot"></div>
+  <span id="status-text">NOT CONNECTED</span>
+</div>
+
+<button id="btn-connect">Connect to ESP32</button>
+
+<!-- Nav search -->
+<div class="nav-box">
+  <label>NAVIGATE TO</label>
+  <div class="nav-row">
+    <input id="place-input" type="text" placeholder="e.g. Eiffel Tower, Paris">
+    <button id="btn-nav">GO</button>
+  </div>
+  <div id="nav-status">Type a place and hit GO</div>
+</div>
+
+<!-- Live bearing -->
+<div id="bearing-display">—</div>
+<div id="bearing-label">BEARING TO DESTINATION</div>
+
+<!-- Compass Rose -->
+<div class="compass-wrap">
+  <svg class="compass-rose" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="130" cy="130" r="120" fill="none" stroke="#2a2a3a" stroke-width="1"/>
+    <circle cx="130" cy="130" r="80"  fill="none" stroke="#1e1e2e" stroke-width="1" stroke-dasharray="4 6"/>
+    <g stroke="#3a3a5a" stroke-width="1">
+      <line x1="130" y1="10"  x2="130" y2="22"/>
+      <line x1="130" y1="238" x2="130" y2="250"/>
+      <line x1="10"  y1="130" x2="22"  y2="130"/>
+      <line x1="238" y1="130" x2="250" y2="130"/>
+    </g>
+    <g stroke="#2a2a3a" stroke-width="1">
+      <line x1="45"  y1="45"  x2="54"  y2="54"/>
+      <line x1="215" y1="45"  x2="206" y2="54"/>
+      <line x1="45"  y1="215" x2="54"  y2="206"/>
+      <line x1="215" y1="215" x2="206" y2="206"/>
+    </g>
+  </svg>
+  <button class="dir-btn cardinal dir-N"  data-dir="N">N</button>
+  <button class="dir-btn dir-NE"          data-dir="NE">NE</button>
+  <button class="dir-btn cardinal dir-E"  data-dir="E">E</button>
+  <button class="dir-btn dir-SE"          data-dir="SE">SE</button>
+  <button class="dir-btn cardinal dir-S"  data-dir="S">S</button>
+  <button class="dir-btn dir-SW"          data-dir="SW">SW</button>
+  <button class="dir-btn cardinal dir-W"  data-dir="W">W</button>
+  <button class="dir-btn dir-NW"          data-dir="NW">NW</button>
+  <button class="dir-HERE" data-dir="HERE">ARRIVE</button>
+</div>
+
+<div id="last-sent">—</div>
+
+<div class="note">
+  ⚠ Web BLE requires <strong>Chrome on Android</strong> or
+  <strong>Bluefy on iOS</strong>.<br>
+  <a href="https://apps.apple.com/app/bluefy/id1492822055" target="_blank">Get Bluefy →</a>
+</div>
+
+<script>
+  const SERVICE_UUID        = '12345678-1234-1234-1234-123456789abc';
+  const CHARACTERISTIC_UUID = 'abcd1234-ab12-ab12-ab12-abcdef012345';
+
+  let bleDevice = null, bleChar = null;
+
+  const btnConnect   = document.getElementById('btn-connect');
+  const statusDot    = document.getElementById('status-dot');
+  const statusText   = document.getElementById('status-text');
+  const lastSent     = document.getElementById('last-sent');
+  const placeInput   = document.getElementById('place-input');
+  const btnNav       = document.getElementById('btn-nav');
+  const navStatus    = document.getElementById('nav-status');
+  const bearingDisp  = document.getElementById('bearing-display');
+
+  // ── BLE ────────────────────────────────────────────────────
+  function setStatus(state, msg) {
+    statusDot.className = state;
+    statusText.textContent = msg;
+  }
+
+  async function connect() {
+    if (!navigator.bluetooth) {
+      setStatus('err', 'WEB BLE NOT SUPPORTED');
+      alert('Use Bluefy (iOS) or Chrome (Android).');
+      return;
+    }
+    try {
+      setStatus('', 'SCANNING...');
+      bleDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ name: 'ESP32-Compass' }],
+        optionalServices: [SERVICE_UUID]
+      });
+      bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+      const server  = await bleDevice.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      bleChar       = await service.getCharacteristic(CHARACTERISTIC_UUID);
+      setStatus('on', 'CONNECTED');
+      btnConnect.textContent = 'Disconnect';
+    } catch (err) {
+      setStatus('err', 'FAILED');
+      console.error(err);
+    }
+  }
+
+  function onDisconnected() {
+    bleChar = null;
+    setStatus('', 'DISCONNECTED');
+    btnConnect.textContent = 'Connect to ESP32';
+  }
+
+  function disconnect() {
+    if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
+  }
+
+  btnConnect.addEventListener('click', () => {
+    if (bleChar) disconnect(); else connect();
+  });
+
+  async function sendDir(dir) {
+    if (!bleChar) { alert('Connect to ESP32 first.'); return; }
+    try {
+      await bleChar.writeValueWithoutResponse(new TextEncoder().encode(dir));
+      lastSent.innerHTML = `SENT: <span>${dir}</span>`;
+    } catch (err) {
+      setStatus('err', 'SEND FAILED');
+      console.error(err);
+    }
+  }
+
+  // Direction buttons
+  document.querySelectorAll('[data-dir]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      sendDir(btn.dataset.dir);
+      setTimeout(() => btn.classList.remove('active'), 300);
+    });
+  });
+
+  // ── Bearing math ───────────────────────────────────────────
+  function calcBearing(lat1, lon1, lat2, lon2) {
+    const toRad = d => d * Math.PI / 180;
+    const dLon  = toRad(lon2 - lon1);
+    const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+    const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2))
+            - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+    return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+  }
+
+  function bearingToDir(deg) {
+    const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    return dirs[Math.round(deg / 45) % 8];
+  }
+
+  // ── Navigation ─────────────────────────────────────────────
+  async function navigate() {
+    const place = placeInput.value.trim();
+    if (!place) return;
+
+    navStatus.className = '';
+    navStatus.textContent = 'Getting your location...';
+
+    // 1. Get user GPS
+    let userPos;
+    try {
+      userPos = await new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
+      );
+    } catch {
+      navStatus.className = 'err';
+      navStatus.textContent = 'Location access denied — enable it and retry.';
+      return;
+    }
+
+    const userLat = userPos.coords.latitude;
+    const userLon = userPos.coords.longitude;
+
+    navStatus.textContent = `Searching "${place}"...`;
+
+    // 2. Geocode with Nominatim (OpenStreetMap, free, no key)
+    let destLat, destLon, destName;
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(place)}&format=json&limit=1`;
+      const res  = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      const data = await res.json();
+      if (!data.length) throw new Error('Not found');
+      destLat  = parseFloat(data[0].lat);
+      destLon  = parseFloat(data[0].lon);
+      destName = data[0].display_name.split(',')[0];
+    } catch {
+      navStatus.className = 'err';
+      navStatus.textContent = `Can't find "${place}" — try a more specific name.`;
+      return;
+    }
+
+    // 3. Calculate bearing and send
+    const bearing = Math.round(calcBearing(userLat, userLon, destLat, destLon));
+    const dir     = bearingToDir(bearing);
+
+    bearingDisp.textContent = `${bearing}° ${dir}`;
+    navStatus.className = 'ok';
+    navStatus.textContent = `→ ${destName} (${bearing}°)`;
+
+    sendDir(String(bearing));
+  }
+
+  btnNav.addEventListener('click', navigate);
+  placeInput.addEventListener('keydown', e => { if (e.key === 'Enter') navigate(); });
+</script>
+</body>
+</html>
